@@ -23,9 +23,10 @@ dependencies:
   firebase_storage: ^12.4.5
 
   # Utilities
-  image_picker: ^1.1.2
+  image_picker: ^1.2.2
   url_launcher: ^6.3.1
   cached_network_image: ^3.4.1
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

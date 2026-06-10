@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/widgets/app_brand_logo.dart';
+import 'package:campus_trace/frontend/screens/report/report_item_screen.dart';
 
 /// User-focused Home Dashboard for CampusTrace.
 ///
@@ -119,7 +120,9 @@ class HomeDashboardScreen extends StatelessWidget {
   Widget _buildFab(BuildContext context) {
     return FloatingActionButton.extended(
       onPressed: () {
-        // TODO: Navigate to Report Item
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ReportItemScreen()),
+        );
       },
       backgroundColor: AppColors.primaryContainer,
       foregroundColor: Colors.white,
@@ -286,7 +289,7 @@ class _StatsRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             value: '906',
-            label: 'Recovered',
+            label: 'Items Recovered',
             icon: Icons.check_circle_outline_rounded,
             color: AppColors.secondary,
           ),

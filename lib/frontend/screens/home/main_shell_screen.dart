@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/screens/home/home_dashboard_screen.dart';
-import 'package:campus_trace/frontend/screens/home/discover_placeholder_screen.dart';
+import 'package:campus_trace/frontend/screens/discover/discover_screen.dart';
 import 'package:campus_trace/frontend/screens/home/my_reports_placeholder_screen.dart';
 
 /// Main shell with bottom navigation bar.
@@ -28,7 +28,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   final List<Widget> _screens = const [
     HomeDashboardScreen(),
-    DiscoverPlaceholderScreen(),
+    DiscoverScreen(),
     MyReportsPlaceholderScreen(),
   ];
 
