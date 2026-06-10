@@ -9,6 +9,7 @@ import 'package:campus_trace/frontend/widgets/custom_password_field.dart';
 import 'package:campus_trace/frontend/widgets/primary_button.dart';
 import 'package:campus_trace/frontend/widgets/app_brand_logo.dart';
 import 'package:campus_trace/frontend/screens/auth/signup_screen.dart';
+import 'package:campus_trace/frontend/screens/home/main_shell_screen.dart';
 import 'package:campus_trace/core/constants/app_strings.dart';
 import 'package:campus_trace/core/utils/validators.dart';
 import 'dart:ui';
@@ -69,18 +70,26 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _handleSignIn() {
-    if (_formKey.currentState?.validate() ?? false) {
-      // TODO: Integrate Firebase Auth
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Sign-in flow not yet connected.'),
-          backgroundColor: AppColors.primaryContainer,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    }
+    // TEMPORARY: Skip validation and navigate directly to dashboard.
+    // Will be replaced with Firebase Auth integration later.
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder(
+        pageBuilder: (context, animation1, animation2) =>
+            const MainShellScreen(),
+        transitionDuration: const Duration(milliseconds: 500),
+        reverseTransitionDuration: const Duration(milliseconds: 400),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOut,
+            ),
+            child: child,
+          );
+        },
+      ),
+      (route) => false,
+    );
   }
 
   void _navigateToSignup() {
