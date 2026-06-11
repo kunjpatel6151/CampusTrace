@@ -5,6 +5,9 @@ import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/widgets/app_brand_logo.dart';
 import 'package:campus_trace/frontend/screens/report/report_item_screen.dart';
+import 'package:campus_trace/frontend/screens/profile/profile_screen.dart';
+import 'package:campus_trace/frontend/screens/item/item_detail_screen.dart';
+import 'package:campus_trace/frontend/screens/notifications/notifications_screen.dart';
 
 /// User-focused Home Dashboard for CampusTrace.
 ///
@@ -86,7 +89,9 @@ class HomeDashboardScreen extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+          },
           icon: Badge(
             smallSize: 8,
             backgroundColor: AppColors.tertiary,
@@ -100,7 +105,7 @@ class HomeDashboardScreen extends StatelessWidget {
           padding: const EdgeInsets.only(right: 8),
           child: GestureDetector(
             onTap: () {
-              // TODO: Navigate to Profile
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
             child: CircleAvatar(
               radius: 18,
@@ -386,8 +391,22 @@ class _ItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ItemDetailScreen(
+              isOwner: false,
+              title: item.title,
+              type: item.statusColor == AppColors.error ? 'Lost' : 'Found',
+              status: 'Active',
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(14),
@@ -487,6 +506,7 @@ class _ItemCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

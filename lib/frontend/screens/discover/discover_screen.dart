@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/screens/report/report_item_screen.dart';
+import 'package:campus_trace/frontend/screens/item/item_detail_screen.dart';
+import 'package:campus_trace/frontend/screens/notifications/notifications_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -144,7 +146,9 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
       ),
       actions: [
         IconButton(
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+          },
           icon: Badge(
             smallSize: 8,
             backgroundColor: AppColors.tertiary,
@@ -514,7 +518,19 @@ class _DiscoverItemCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ItemDetailScreen(
+                  isOwner: false,
+                  title: item.title,
+                  type: item.statusColor == AppColors.error ? 'Lost' : 'Found',
+                  status: 'Active',
+                ),
+              ),
+            );
+          },
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(

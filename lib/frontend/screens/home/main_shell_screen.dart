@@ -5,7 +5,7 @@ import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/screens/home/home_dashboard_screen.dart';
 import 'package:campus_trace/frontend/screens/discover/discover_screen.dart';
-import 'package:campus_trace/frontend/screens/home/my_reports_placeholder_screen.dart';
+import 'package:campus_trace/frontend/screens/my_reports/my_reports_screen.dart';
 
 /// Main shell with bottom navigation bar.
 ///
@@ -29,7 +29,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   final List<Widget> _screens = const [
     HomeDashboardScreen(),
     DiscoverScreen(),
-    MyReportsPlaceholderScreen(),
+    MyReportsScreen(),
   ];
 
   @override
@@ -62,26 +62,32 @@ class _MainShellScreenState extends State<MainShellScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _NavItem(
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home_rounded,
-                  label: 'Home',
-                  isActive: _currentIndex == 0,
-                  onTap: () => setState(() => _currentIndex = 0),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'Home',
+                    isActive: _currentIndex == 0,
+                    onTap: () => setState(() => _currentIndex = 0),
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.travel_explore_outlined,
-                  activeIcon: Icons.travel_explore_rounded,
-                  label: 'Discover',
-                  isActive: _currentIndex == 1,
-                  onTap: () => setState(() => _currentIndex = 1),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.travel_explore_outlined,
+                    activeIcon: Icons.travel_explore_rounded,
+                    label: 'Discover',
+                    isActive: _currentIndex == 1,
+                    onTap: () => setState(() => _currentIndex = 1),
+                  ),
                 ),
-                _NavItem(
-                  icon: Icons.assignment_outlined,
-                  activeIcon: Icons.assignment_rounded,
-                  label: 'My Reports',
-                  isActive: _currentIndex == 2,
-                  onTap: () => setState(() => _currentIndex = 2),
+                Expanded(
+                  child: _NavItem(
+                    icon: Icons.assignment_outlined,
+                    activeIcon: Icons.assignment_rounded,
+                    label: 'My Reports',
+                    isActive: _currentIndex == 2,
+                    onTap: () => setState(() => _currentIndex = 2),
+                  ),
                 ),
               ],
             ),
@@ -115,33 +121,41 @@ class _NavItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.primaryFixed.withValues(alpha: 0.5)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: color,
-              size: 24,
+      child: Container(
+        color: Colors.transparent, // Ensure full width touch area
+        child: Center(
+          heightFactor: 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? AppColors.primaryFixed.withValues(alpha: 0.5)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: AppTextStyles.labelSm.copyWith(
-                color: color,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 11,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isActive ? activeIcon : icon,
+                  color: color,
+                  size: 24,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.visible,
+                  style: AppTextStyles.labelSm.copyWith(
+                    color: color,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
