@@ -63,3 +63,8 @@ linux/flutter/ephemeral/
 Thumbs.db
 
 .metadata
+
+# Firebase emulator files (future-proof)
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

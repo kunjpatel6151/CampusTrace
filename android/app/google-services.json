@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "181833965292",
+    "project_id": "campustrace-503f6",
+    "storage_bucket": "campustrace-503f6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181833965292:android:cc4c9fa0b8af0a82a48fc9",
+        "android_client_info": {
+          "package_name": "com.example.campus_trace"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZ4eDftGN2xbIQ776RZFhehDAndfokTRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
