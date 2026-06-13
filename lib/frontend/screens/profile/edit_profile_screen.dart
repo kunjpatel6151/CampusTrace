@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
+import 'package:campus_trace/backend/services/cloudinary_service.dart';
+import 'package:campus_trace/backend/models/app_user.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -14,21 +18,43 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
+  final _authService = AuthService();
+  final _cloudinaryService = CloudinaryService();
   
   File? _profileImage;
   bool _isLoading = false;
+  AppUser? _currentUser;
 
-  final _nameController = TextEditingController(text: 'John Doe');
-  final _emailController = TextEditingController(text: 'john.doe@campus.edu');
-  final _phoneController = TextEditingController(text: '+1 (555) 123-4567');
-  final _campusController = TextEditingController(text: 'Science Building');
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final uid = _authService.currentUser?.uid;
+    if (uid != null) {
+      final user = await _authService.getUserData(uid);
+      if (user != null && mounted) {
+        setState(() {
+          _currentUser = user;
+          _nameController.text = user.fullName;
+          _emailController.text = user.email;
+          _phoneController.text = user.phoneNumber ?? '';
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _campusController.dispose();
     super.dispose();
   }
 
@@ -42,22 +68,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _saveProfile() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate() && _currentUser != null) {
       setState(() => _isLoading = true);
       
-      // Simulate network request
-      await Future.delayed(const Duration(seconds: 1));
-      
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Profile updated successfully'),
-            backgroundColor: AppColors.secondary,
-            behavior: SnackBarBehavior.floating,
-          ),
+      try {
+        String? profileImageUrl = _currentUser!.profileImageUrl;
+        if (_profileImage != null) {
+          final uploadedUrl = await _cloudinaryService.uploadImage(_profileImage!);
+          if (uploadedUrl != null) {
+            profileImageUrl = uploadedUrl;
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to upload image'), backgroundColor: AppColors.error),
+              );
+            }
+          }
+        }
+
+        await _authService.updateProfile(
+          uid: _currentUser!.uid,
+          fullName: _nameController.text.trim(),
+          phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+          profileImageUrl: profileImageUrl,
         );
-        Navigator.pop(context);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Profile updated successfully'),
+              backgroundColor: AppColors.secondary,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -101,12 +156,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 image: FileImage(_profileImage!),
                                 fit: BoxFit.cover,
                               )
-                            : null,
+                            : (_currentUser?.profileImageUrl != null
+                                ? DecorationImage(
+                                    image: CachedNetworkImageProvider(_currentUser!.profileImageUrl!),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null),
                       ),
-                      child: _profileImage == null
+                      child: (_profileImage == null && _currentUser?.profileImageUrl == null)
                           ? Center(
                               child: Text(
-                                'JD',
+                                _getInitials(_nameController.text),
                                 style: AppTextStyles.headlineXl.copyWith(
                                   color: AppColors.primary,
                                 ),
@@ -142,7 +202,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 controller: _emailController,
                 icon: Icons.mail_outline,
                 keyboardType: TextInputType.emailAddress,
-                validator: (val) => val == null || !val.contains('@') ? 'Enter a valid email' : null,
+                readOnly: true,
               ),
               const SizedBox(height: 16),
               
@@ -151,13 +211,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 controller: _phoneController,
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 16),
-              
-              _buildTextField(
-                label: 'Campus / Organization',
-                controller: _campusController,
-                icon: Icons.business_outlined,
               ),
               const SizedBox(height: 48),
             ],
@@ -203,12 +256,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
+    bool readOnly = false,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-      style: AppTextStyles.bodyMd.copyWith(color: AppColors.onBackground),
+      readOnly: readOnly,
+      style: AppTextStyles.bodyMd.copyWith(
+        color: readOnly ? AppColors.onSurfaceVariant : AppColors.onBackground,
+      ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.outline),
@@ -229,5 +286,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
       ),
     );
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty) return '??';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length > 1) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.substring(0, name.length > 1 ? 2 : 1).toUpperCase();
   }
 }

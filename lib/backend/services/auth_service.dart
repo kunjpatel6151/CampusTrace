@@ -14,6 +14,7 @@ class AuthService {
     required String fullName,
     required String email,
     required String password,
+    String? phoneNumber,
   }) async {
     try {
       UserCredential credential = await _auth.createUserWithEmailAndPassword(
@@ -26,6 +27,7 @@ class AuthService {
           uid: credential.user!.uid,
           fullName: fullName,
           email: email,
+          phoneNumber: phoneNumber,
           createdAt: DateTime.now(),
         );
 
@@ -56,6 +58,39 @@ class AuthService {
 
   Future<void> signOut() async {
     await _auth.signOut();
+  }
+
+  Future<AppUser?> getUserData(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists && doc.data() != null) {
+        return AppUser.fromMap(doc.data()!);
+      }
+    } catch (e) {
+      print('Error fetching user data: $e');
+    }
+    return null;
+  }
+
+  Future<void> updateProfile({
+    required String uid,
+    required String fullName,
+    String? phoneNumber,
+    String? profileImageUrl,
+  }) async {
+    try {
+      final Map<String, dynamic> updates = {
+        'fullName': fullName,
+        'phoneNumber': phoneNumber,
+      };
+      if (profileImageUrl != null) {
+        updates['profileImageUrl'] = profileImageUrl;
+      }
+      await _firestore.collection('users').doc(uid).update(updates);
+    } catch (e) {
+      print('Error updating profile: $e');
+      throw Exception('Failed to update profile.');
+    }
   }
 
   Exception _getReadableAuthError(FirebaseAuthException e) {

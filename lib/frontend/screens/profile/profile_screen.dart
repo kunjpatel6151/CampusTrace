@@ -8,8 +8,53 @@ import 'package:campus_trace/frontend/screens/profile/about_screen.dart';
 import 'package:campus_trace/frontend/screens/auth/login_screen.dart';
 import 'package:campus_trace/backend/services/auth_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+import 'package:campus_trace/backend/models/app_user.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final AuthService _authService = AuthService();
+  AppUser? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final uid = _authService.currentUser?.uid;
+    if (uid != null) {
+      final user = await _authService.getUserData(uid);
+      if (mounted) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  String _getInitials(String name) {
+    if (name.isEmpty) return '??';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length > 1) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.substring(0, name.length > 1 ? 2 : 1).toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,26 +70,29 @@ class ProfileScreen extends StatelessWidget {
           style: AppTextStyles.headlineMd.copyWith(color: AppColors.onBackground),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeroSection(),
-            const SizedBox(height: 24),
-            _buildStatsSection(),
-            const SizedBox(height: 24),
-            _buildAchievementsSection(),
-            const SizedBox(height: 32),
-            _buildAccountSection(context),
-            const SizedBox(height: 32),
-            _buildSignOut(context),
-            const SizedBox(height: 48),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _user == null
+              ? const Center(child: Text('User not found'))
+              : SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildHeroSection(),
+                      const SizedBox(height: 24),
+                      _buildStatsSection(),
+                      const SizedBox(height: 32),
+                      _buildAccountSection(context),
+                      const SizedBox(height: 32),
+                      _buildSignOut(context),
+                      const SizedBox(height: 48),
+                    ],
+                  ),
+                ),
     );
   }
 
   Widget _buildHeroSection() {
+    final hasImage = _user?.profileImageUrl != null && _user!.profileImageUrl!.isNotEmpty;
     return Column(
       children: [
         const SizedBox(height: 16),
@@ -62,20 +110,28 @@ class ProfileScreen extends StatelessWidget {
                 offset: const Offset(0, 10),
               ),
             ],
+            image: hasImage
+                ? DecorationImage(
+                    image: CachedNetworkImageProvider(_user!.profileImageUrl!),
+                    fit: BoxFit.cover,
+                  )
+                : null,
           ),
-          child: Center(
-            child: Text(
-              'JD',
-              style: AppTextStyles.headlineXl.copyWith(
-                color: AppColors.primary,
-                fontSize: 48,
-              ),
-            ),
-          ),
+          child: hasImage
+              ? null
+              : Center(
+                  child: Text(
+                    _getInitials(_user?.fullName ?? ''),
+                    style: AppTextStyles.headlineXl.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 48,
+                    ),
+                  ),
+                ),
         ),
         const SizedBox(height: 16),
         Text(
-          'John Doe',
+          _user?.fullName ?? 'Unknown User',
           style: AppTextStyles.headlineLgMobile.copyWith(
             color: AppColors.onBackground,
           ),
@@ -87,13 +143,44 @@ class ProfileScreen extends StatelessWidget {
             Icon(Icons.mail_outline, size: 16, color: AppColors.onSurfaceVariant),
             const SizedBox(width: 6),
             Text(
-              'john.doe@campus.edu',
+              _user?.email ?? '',
               style: AppTextStyles.bodyMd.copyWith(
                 color: AppColors.onSurfaceVariant,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.phone_outlined, size: 16, color: AppColors.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(
+              (_user?.phoneNumber != null && _user!.phoneNumber!.isNotEmpty)
+                  ? _user!.phoneNumber!
+                  : 'Not provided',
+              style: AppTextStyles.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_user != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Member Since ${DateFormat('MMMM yyyy').format(_user!.createdAt)}',
+              style: AppTextStyles.labelSm.copyWith(
+                color: AppColors.primary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -106,7 +193,7 @@ class ProfileScreen extends StatelessWidget {
           Expanded(
             child: _StatCard(
               title: 'Reports\nSubmitted',
-              value: '12',
+              value: '0',
               color: AppColors.primary,
             ),
           ),
@@ -114,7 +201,7 @@ class ProfileScreen extends StatelessWidget {
           Expanded(
             child: _StatCard(
               title: 'Items\nRecovered',
-              value: '8',
+              value: '0',
               color: AppColors.secondary,
             ),
           ),
@@ -122,42 +209,12 @@ class ProfileScreen extends StatelessWidget {
           Expanded(
             child: _StatCard(
               title: 'Recovery\nRate',
-              value: '66%',
+              value: '0%',
               color: AppColors.tertiary,
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAchievementsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'Achievements',
-            style: AppTextStyles.labelMd.copyWith(color: AppColors.outline),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 36,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            scrollDirection: Axis.horizontal,
-            children: [
-              _AchievementChip(icon: Icons.flag_rounded, label: 'First Report', color: AppColors.primary),
-              const SizedBox(width: 8),
-              _AchievementChip(icon: Icons.volunteer_activism_rounded, label: 'Helpful Finder', color: AppColors.secondary),
-              const SizedBox(width: 8),
-              _AchievementChip(icon: Icons.emoji_events_rounded, label: 'Recovery Champion', color: AppColors.tertiary),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -184,8 +241,12 @@ class ProfileScreen extends StatelessWidget {
                   icon: Icons.person_outline,
                   title: 'Edit Profile',
                   subtitle: 'Update your personal details',
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                  onTap: () async {
+                    final updated = await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                    if (updated == true) {
+                      setState(() => _isLoading = true);
+                      _loadUser();
+                    }
                   },
                 ),
                 const Divider(height: 1, indent: 56, endIndent: 16, color: AppColors.outlineVariant),
@@ -299,39 +360,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _AchievementChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _AchievementChip({required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppTextStyles.labelSm.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
