@@ -7,6 +7,8 @@ import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/widgets/animated_logo.dart';
 import 'package:campus_trace/frontend/widgets/animated_loading_bar.dart';
 import 'package:campus_trace/frontend/screens/auth/login_screen.dart';
+import 'package:campus_trace/frontend/screens/home/main_shell_screen.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
 
 /// Full-screen splash / loading screen for CampusTrace.
 ///
@@ -48,12 +50,18 @@ class _SplashLoadingScreenState extends State<SplashLoadingScreen>
 
     _fadeController.forward();
 
-    // Auto-navigate after 2.5 seconds
+    // Auto-navigate after 2.5 seconds based on auth state
     Future.delayed(const Duration(milliseconds: 2500), () {
       if (!mounted) return;
+      
+      final authService = AuthService();
+      final Widget nextScreen = authService.currentUser != null 
+          ? const MainShellScreen() 
+          : const LoginScreen();
+
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation1, animation2) => const LoginScreen(),
+          pageBuilder: (context, animation1, animation2) => nextScreen,
           transitionDuration: const Duration(milliseconds: 600),
           reverseTransitionDuration: const Duration(milliseconds: 400),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {

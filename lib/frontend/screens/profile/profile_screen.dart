@@ -6,6 +6,7 @@ import 'package:campus_trace/frontend/screens/profile/edit_profile_screen.dart';
 import 'package:campus_trace/frontend/screens/profile/notification_preferences_screen.dart';
 import 'package:campus_trace/frontend/screens/profile/about_screen.dart';
 import 'package:campus_trace/frontend/screens/auth/login_screen.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -219,13 +220,22 @@ class ProfileScreen extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: OutlinedButton.icon(
-          onPressed: () {
-            // Navigate back to login, clearing the stack
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (route) => false,
-            );
+          onPressed: () async {
+            try {
+              await AuthService().signOut();
+              if (!context.mounted) return;
+              // Navigate back to login, clearing the stack
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            } catch (e) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to sign out. Please try again.')),
+              );
+            }
           },
           icon: const Icon(Icons.logout_rounded, size: 20),
           label: const Text('Sign Out'),

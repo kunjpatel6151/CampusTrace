@@ -12,6 +12,7 @@ import 'package:campus_trace/frontend/screens/auth/signup_screen.dart';
 import 'package:campus_trace/frontend/screens/home/main_shell_screen.dart';
 import 'package:campus_trace/core/constants/app_strings.dart';
 import 'package:campus_trace/core/utils/validators.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
 import 'dart:ui';
 
 /// Login screen for CampusTrace.
@@ -32,6 +33,8 @@ class _LoginScreenState extends State<LoginScreen>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _rememberMe = false;
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   late final AnimationController _animController;
   late final Animation<double> _fadeAnimation;
@@ -69,27 +72,56 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _handleSignIn() {
-    // TEMPORARY: Skip validation and navigate directly to dashboard.
-    // Will be replaced with Firebase Auth integration later.
-    Navigator.of(context).pushAndRemoveUntil(
-      PageRouteBuilder(
-        pageBuilder: (context, animation1, animation2) =>
-            const MainShellScreen(),
-        transitionDuration: const Duration(milliseconds: 500),
-        reverseTransitionDuration: const Duration(milliseconds: 400),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOut,
-            ),
-            child: child,
-          );
-        },
-      ),
-      (route) => false,
-    );
+  Future<void> _handleSignIn() async {
+    if (_formKey.currentState?.validate() ?? false) {
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        await _authService.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          PageRouteBuilder(
+            pageBuilder: (context, animation1, animation2) =>
+                const MainShellScreen(),
+            transitionDuration: const Duration(milliseconds: 500),
+            reverseTransitionDuration: const Duration(milliseconds: 400),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOut,
+                ),
+                child: child,
+              );
+            },
+          ),
+          (route) => false,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    }
   }
 
   void _navigateToSignup() {
@@ -246,6 +278,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   // Sign In button
                                   PrimaryButton(
                                     label: AppStrings.signIn,
+                                    isLoading: _isLoading,
                                     onPressed: _handleSignIn,
                                   ),
                                 ],

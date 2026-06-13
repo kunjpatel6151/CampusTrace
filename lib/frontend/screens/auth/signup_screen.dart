@@ -10,6 +10,8 @@ import 'package:campus_trace/frontend/widgets/primary_button.dart';
 import 'package:campus_trace/frontend/widgets/app_brand_logo.dart';
 import 'package:campus_trace/core/constants/app_strings.dart';
 import 'package:campus_trace/core/utils/validators.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
+import 'package:campus_trace/frontend/screens/home/main_shell_screen.dart';
 import 'dart:ui';
 
 /// Signup screen for CampusTrace.
@@ -33,6 +35,8 @@ class _SignupScreenState extends State<SignupScreen>
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _acceptedTerms = false;
+  bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   late final AnimationController _animController;
   late final Animation<double> _fadeAnimation;
@@ -73,7 +77,7 @@ class _SignupScreenState extends State<SignupScreen>
     super.dispose();
   }
 
-  void _handleCreateAccount() {
+  Future<void> _handleCreateAccount() async {
     if (!_acceptedTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -87,16 +91,40 @@ class _SignupScreenState extends State<SignupScreen>
       return;
     }
     if (_formKey.currentState?.validate() ?? false) {
-      // TODO: Integrate Firebase Auth
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Account creation not yet connected.'),
-          backgroundColor: AppColors.primaryContainer,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        await _authService.signUpWithEmailAndPassword(
+          fullName: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainShellScreen()),
+          (route) => false,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
   }
 
@@ -264,6 +292,7 @@ class _SignupScreenState extends State<SignupScreen>
                                   // Create Account button
                                   PrimaryButton(
                                     label: AppStrings.createAccount,
+                                    isLoading: _isLoading,
                                     onPressed: _handleCreateAccount,
                                   ),
                                 ],
