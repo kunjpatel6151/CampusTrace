@@ -8,11 +8,13 @@ import 'package:campus_trace/frontend/screens/report/report_item_screen.dart';
 import 'package:campus_trace/frontend/screens/profile/profile_screen.dart';
 import 'package:campus_trace/frontend/screens/item/item_detail_screen.dart';
 import 'package:campus_trace/frontend/screens/notifications/notifications_screen.dart';
+import 'package:campus_trace/backend/models/report_model.dart';
+import 'package:campus_trace/backend/services/report_service.dart';
+import 'package:intl/intl.dart';
 
 /// User-focused Home Dashboard for CampusTrace.
 ///
-/// Displays greeting, lightweight stats, recent lost/found activity feed,
-/// and a Report Item FAB. Uses mock data only — no backend logic.
+/// Displays greeting, lightweight stats, and recent lost/found activity feed.
 class HomeDashboardScreen extends StatelessWidget {
   const HomeDashboardScreen({super.key});
 
@@ -28,35 +30,67 @@ class HomeDashboardScreen extends StatelessWidget {
           // ── Body content ─────────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Greeting
-                const _GreetingSection(),
-                const SizedBox(height: 24),
+            sliver: SliverToBoxAdapter(
+              child: StreamBuilder<List<ReportModel>>(
+                stream: ReportService().getAllReports(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()));
+                  }
+                  if (snapshot.hasError) {
+                    debugPrint('HomeDashboard Stream Error: ${snapshot.error}');
+                    return Center(child: Text('${snapshot.error}', style: AppTextStyles.bodySm.copyWith(color: AppColors.error)));
+                  }
 
-                // Stats
-                const _SectionHeader(title: 'Overview'),
-                const SizedBox(height: 14),
-                const _StatsRow(),
-                const SizedBox(height: 28),
+                  final allItems = snapshot.data ?? [];
+                  final lostItems = allItems.where((i) => i.type == 'lost').take(3).toList();
+                  final foundItems = allItems.where((i) => i.type == 'found').take(3).toList();
 
-                // Recent Lost Items
-                const _SectionHeader(
-                  title: 'Recent Lost Items',
-                  trailing: 'View All',
-                ),
-                const SizedBox(height: 14),
-                ..._buildMockLostItems(),
-                const SizedBox(height: 28),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Greeting
+                      const _GreetingSection(),
+                      const SizedBox(height: 24),
 
-                // Recent Found Items
-                const _SectionHeader(
-                  title: 'Recent Found Items',
-                  trailing: 'View All',
-                ),
-                const SizedBox(height: 14),
-                ..._buildMockFoundItems(),
-              ]),
+                      // Stats
+                      const _SectionHeader(title: 'Overview'),
+                      const SizedBox(height: 14),
+                      const _StatsRow(),
+                      const SizedBox(height: 28),
+
+                      // Recent Lost Items
+                      const _SectionHeader(
+                        title: 'Recent Lost Items',
+                        trailing: 'View All',
+                      ),
+                      const SizedBox(height: 14),
+                      if (lostItems.isEmpty)
+                        Text('No active lost items.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                      else
+                        ...lostItems.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ItemCard(item: item),
+                        )),
+                      const SizedBox(height: 28),
+
+                      // Recent Found Items
+                      const _SectionHeader(
+                        title: 'Recent Found Items',
+                        trailing: 'View All',
+                      ),
+                      const SizedBox(height: 14),
+                      if (foundItems.isEmpty)
+                        Text('No active found items.', style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant))
+                      else
+                        ...foundItems.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ItemCard(item: item),
+                        )),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -141,71 +175,6 @@ class HomeDashboardScreen extends StatelessWidget {
     );
   }
 
-  static List<Widget> _buildMockLostItems() {
-    final items = [
-      _MockItem(
-        title: 'MacBook Pro Charger',
-        location: 'Library, 2nd Floor',
-        date: 'Jun 8, 2026',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.laptop_mac_rounded,
-      ),
-      _MockItem(
-        title: 'Student ID Card',
-        location: 'Science Building',
-        date: 'Jun 7, 2026',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.badge_rounded,
-      ),
-      _MockItem(
-        title: 'Blue Water Bottle',
-        location: 'Cafeteria',
-        date: 'Jun 7, 2026',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.water_drop_rounded,
-      ),
-    ];
-    return items.map((item) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: _ItemCard(item: item),
-    )).toList();
-  }
-
-  static List<Widget> _buildMockFoundItems() {
-    final items = [
-      _MockItem(
-        title: 'AirPods Pro Case',
-        location: 'Gym Locker Room',
-        date: 'Jun 9, 2026',
-        status: 'Found',
-        statusColor: AppColors.secondary,
-        icon: Icons.headphones_rounded,
-      ),
-      _MockItem(
-        title: 'Black Umbrella',
-        location: 'Main Entrance',
-        date: 'Jun 8, 2026',
-        status: 'Found',
-        statusColor: AppColors.secondary,
-        icon: Icons.umbrella_rounded,
-      ),
-      _MockItem(
-        title: 'Car Keys (Toyota)',
-        location: 'Parking Lot B',
-        date: 'Jun 8, 2026',
-        status: 'Found',
-        statusColor: AppColors.secondary,
-        icon: Icons.key_rounded,
-      ),
-    ];
-    return items.map((item) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: _ItemCard(item: item),
-    )).toList();
-  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -280,35 +249,56 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            value: '1,248',
-            label: 'Items Reported',
-            icon: Icons.inventory_2_outlined,
-            color: AppColors.primary,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            value: '906',
-            label: 'Items Recovered',
-            icon: Icons.check_circle_outline_rounded,
-            color: AppColors.secondary,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatCard(
-            value: '72%',
-            label: 'Success Rate',
-            icon: Icons.trending_up_rounded,
-            color: AppColors.primaryContainer,
-          ),
-        ),
-      ],
+    return FutureBuilder<Map<String, dynamic>>(
+      future: ReportService().getPlatformReportStats(),
+      builder: (context, snapshot) {
+        String reported = '...';
+        String recovered = '...';
+        String rate = '...';
+
+        if (snapshot.connectionState == ConnectionState.done) {
+          if (snapshot.hasError) {
+            reported = 'Err';
+            recovered = 'Err';
+            rate = 'Err';
+          } else if (snapshot.hasData) {
+            reported = snapshot.data!['reportsSubmitted'].toString();
+            recovered = snapshot.data!['itemsRecovered'].toString();
+            rate = '${snapshot.data!['recoveryRate']}%';
+          }
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                value: reported,
+                label: 'Items Reported',
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                value: recovered,
+                label: 'Items Recovered',
+                icon: Icons.check_circle_outline_rounded,
+                color: AppColors.secondary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _StatCard(
+                value: rate,
+                label: 'Success Rate',
+                icon: Icons.trending_up_rounded,
+                color: AppColors.primaryContainer,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -364,149 +354,132 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ── Mock data model ─────────────────────────────────────────────────────────
 
-class _MockItem {
-  final String title;
-  final String location;
-  final String date;
-  final String status;
-  final Color statusColor;
-  final IconData icon;
-
-  const _MockItem({
-    required this.title,
-    required this.location,
-    required this.date,
-    required this.status,
-    required this.statusColor,
-    required this.icon,
-  });
-}
 
 class _ItemCard extends StatelessWidget {
-  final _MockItem item;
+  final ReportModel item;
 
   const _ItemCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
+    Color statusColor = item.type == 'lost' ? AppColors.tertiary : AppColors.secondary;
+    IconData icon = item.type == 'lost' ? Icons.search_rounded : Icons.check_circle_outline_rounded;
+    String status = item.type == 'lost' ? 'Lost' : 'Found';
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => ItemDetailScreen(
-              isOwner: false,
-              title: item.title,
-              type: item.statusColor == AppColors.error ? 'Lost' : 'Found',
-              status: 'Active',
+              report: item,
             ),
           ),
         );
       },
       child: Container(
         padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.outlineVariant.withValues(alpha: 0.3),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.outlineVariant.withValues(alpha: 0.3),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.03),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Item icon placeholder
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: item.statusColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              item.icon,
-              color: item.statusColor,
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 14),
-
-          // Item details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: AppTextStyles.labelMd.copyWith(
-                    color: AppColors.onBackground,
-                    fontSize: 14,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        item.location,
-                        style: AppTextStyles.bodySm.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.date,
-                  style: AppTextStyles.labelSm.copyWith(
-                    color: AppColors.outline,
-                    fontWeight: FontWeight.w400,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Status badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: item.statusColor.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              item.status,
-              style: AppTextStyles.labelSm.copyWith(
-                color: item.statusColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+        child: Row(
+          children: [
+            // Item icon placeholder
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: statusColor,
+                size: 26,
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+
+            // Item details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: AppTextStyles.labelMd.copyWith(
+                      color: AppColors.onBackground,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          item.location,
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    DateFormat.yMMMd().format(item.createdAt),
+                    style: AppTextStyles.labelSm.copyWith(
+                      color: AppColors.outline,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Status badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                status,
+                style: AppTextStyles.labelSm.copyWith(
+                  color: statusColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

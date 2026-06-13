@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
+import 'package:campus_trace/backend/models/report_model.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
+import 'package:campus_trace/backend/services/report_service.dart';
+import 'package:campus_trace/backend/models/app_user.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ItemDetailScreen extends StatefulWidget {
-  final bool isOwner;
-  final String title;
-  final String type; // 'Lost' or 'Found'
-  final String status; // 'Active', 'Recovered', 'Archived'
+  final ReportModel? report;
 
   const ItemDetailScreen({
     super.key,
-    this.isOwner = false,
-    this.title = 'Matte Black Leather Wallet',
-    this.type = 'Lost',
-    this.status = 'Active',
+    this.report,
   });
 
   @override
@@ -21,13 +22,15 @@ class ItemDetailScreen extends StatefulWidget {
 }
 
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
-  // Mock data
-  final String _date = 'Reported 2 hours ago';
-  final String _summary = 'Lost near the main campus library entrance. Contains important ID cards.';
-  final String _category = 'Accessories';
-  final String _location = 'Engineering Library';
-  final String _reportId = '#CT-8924A';
-  final String _description = 'I believe it fell out of my coat pocket while I was walking up the main steps to the engineering library around 10:30 AM this morning.\n\nThe wallet is relatively slim, matte black leather, and has a distinctive blue stitching on the inside fold. It contains my student ID, a driver\'s license, and two credit cards. If found, please handle with care as the IDs are urgently needed for finals week.';
+  final AuthService _authService = AuthService();
+  final ReportService _reportService = ReportService();
+  bool _isOwner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isOwner = _authService.currentUser?.uid == widget.report?.userId;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +52,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       _buildDescriptionSection(),
                       _buildLocationSection(),
                       _buildReporterSection(),
-                      _buildSimilarItemsSection(),
                     ],
                   ),
                 ),
@@ -90,18 +92,22 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           children: [
             // Mock image container
             Hero(
-              tag: 'item_image_${widget.title}',
+              tag: 'item_image_${widget.report?.reportId ?? 'new'}',
               child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.surfaceContainerHigh,
+                  image: widget.report != null && widget.report!.imageUrl.isNotEmpty ? DecorationImage(
+                    image: CachedNetworkImageProvider(widget.report!.imageUrl),
+                    fit: BoxFit.cover,
+                  ) : null,
                 ),
-                child: Center(
+                child: widget.report == null || widget.report!.imageUrl.isEmpty ? Center(
                   child: Icon(
-                    Icons.image_rounded,
+                    Icons.image_not_supported_outlined,
                     size: 80,
                     color: AppColors.outlineVariant,
                   ),
-                ),
+                ) : null,
               ),
             ),
             // Gradient Overlay
@@ -124,22 +130,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 ),
               ),
             ),
-            // Image Indicator
-            Positioned(
-              bottom: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  '1 / 3',
-                  style: AppTextStyles.labelSm.copyWith(color: Colors.white),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -147,10 +137,15 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _buildHeaderSection() {
+    if (widget.report == null) return const SizedBox.shrink();
+    
+    final isRecovered = widget.report!.isRecovered || widget.report!.status == 'recovered';
+    final type = widget.report!.type;
+    
     Color badgeColor;
-    if (widget.status == 'Recovered') {
+    if (isRecovered) {
       badgeColor = AppColors.secondary;
-    } else if (widget.type == 'Lost') {
+    } else if (type == 'lost') {
       badgeColor = AppColors.error;
     } else {
       badgeColor = AppColors.primary;
@@ -180,7 +175,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      widget.status == 'Recovered' ? 'RECOVERED' : widget.type.toUpperCase(),
+                      isRecovered ? 'RECOVERED' : type.toUpperCase(),
                       style: AppTextStyles.labelSm.copyWith(
                         color: badgeColor,
                         fontWeight: FontWeight.w700,
@@ -192,21 +187,19 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               ),
               const SizedBox(width: 12),
               Text(
-                _date,
+                'Reported on ${DateFormat('MMM d, yyyy').format(widget.report!.reportDate)}',
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            widget.title,
+            widget.report!.title,
             style: AppTextStyles.headlineLgMobile.copyWith(color: AppColors.onBackground),
           ),
           const SizedBox(height: 8),
-          Text(
-            _summary,
-            style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
-          ),
+          // We don't have a separate summary, description can serve this locally if needed
+          // Or we can just omit summary since it's redundant with description
         ],
       ),
     );
@@ -223,10 +216,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         crossAxisSpacing: 12,
         childAspectRatio: 2.2,
         children: [
-          _buildInfoCard('Category', _category, Icons.category_outlined),
-          _buildInfoCard('Location', _location, Icons.location_on_outlined),
-          _buildInfoCard('Date', 'Oct 24, 2026', Icons.calendar_today_outlined),
-          _buildInfoCard('Report ID', _reportId, Icons.tag_rounded),
+          _buildInfoCard('Category', widget.report?.category ?? '', Icons.category_outlined),
+          _buildInfoCard('Location', widget.report?.location ?? '', Icons.location_on_outlined),
+          _buildInfoCard('Date', widget.report != null ? DateFormat('MMM d, yyyy').format(widget.report!.reportDate) : '', Icons.calendar_today_outlined),
+          _buildInfoCard('Report ID', widget.report?.reportId.substring(0, 8).toUpperCase() ?? '', Icons.tag_rounded),
         ],
       ),
     );
@@ -297,7 +290,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              _description,
+              widget.report?.description ?? '',
               style: AppTextStyles.bodyMd.copyWith(
                 color: AppColors.onSurfaceVariant,
                 height: 1.5,
@@ -351,7 +344,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       ],
                     ),
                     child: Text(
-                      _location,
+                      widget.report?.location ?? '',
                       style: AppTextStyles.labelSm.copyWith(color: AppColors.onBackground),
                     ),
                   ),
@@ -386,7 +379,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               ),
               child: Center(
                 child: Text(
-                  'KP',
+                  widget.report?.userName.isNotEmpty == true ? widget.report!.userName[0].toUpperCase() : 'U',
                   style: AppTextStyles.labelMd.copyWith(color: AppColors.primary),
                 ),
               ),
@@ -399,7 +392,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   Row(
                     children: [
                       Text(
-                        'Kunj Patel',
+                        widget.report?.userName ?? 'User',
                         style: AppTextStyles.labelMd.copyWith(color: AppColors.onBackground, fontSize: 16),
                       ),
                       const SizedBox(width: 6),
@@ -408,7 +401,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Verified Campus User',
+                    widget.report?.userEmail ?? '',
                     style: AppTextStyles.bodySm.copyWith(color: AppColors.onSurfaceVariant),
                   ),
                 ],
@@ -420,54 +413,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     );
   }
 
-  Widget _buildSimilarItemsSection() {
-    final mockSimilar = ['Wallet', 'Student ID', 'Backpack', 'Keys'];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'Similar Reports',
-            style: AppTextStyles.headlineMd.copyWith(color: AppColors.onBackground, fontSize: 18),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 120,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            scrollDirection: Axis.horizontal,
-            itemCount: mockSimilar.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              return Container(
-                width: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.image_outlined, color: AppColors.outlineVariant, size: 32),
-                    const SizedBox(height: 8),
-                    Text(
-                      mockSimilar[index],
-                      style: AppTextStyles.labelSm.copyWith(color: AppColors.onBackground),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 32),
-      ],
-    );
-  }
 
   Widget _buildBottomActionBar() {
     return Positioned(
@@ -487,13 +432,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           ],
         ),
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-        child: widget.isOwner ? _buildOwnerActions() : _buildViewerAction(),
+        child: _isOwner ? _buildOwnerActions() : _buildViewerAction(),
       ),
     );
   }
 
   Widget _buildViewerAction() {
-    final btnText = widget.type == 'Lost' ? 'Contact Finder' : 'Contact Reporter';
+    final btnText = widget.report?.type == 'lost' ? 'Contact Finder' : 'Contact Reporter';
     return ElevatedButton.icon(
       onPressed: () => _showContactBottomSheet(),
       icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
@@ -512,11 +457,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _buildOwnerActions() {
+    final isRecovered = widget.report?.isRecovered == true || widget.report?.status == 'recovered';
     return Row(
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              // Edit not fully specified yet, placeholder
+            },
             icon: const Icon(Icons.edit_outlined, size: 18),
             label: const Text('Edit Report'),
             style: OutlinedButton.styleFrom(
@@ -530,7 +478,29 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: isRecovered ? null : () async {
+              try {
+                await _reportService.markRecovered(widget.report!.reportId);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Marked as Recovered!'),
+                      backgroundColor: AppColors.secondary,
+                    ),
+                  );
+                  Navigator.pop(context);
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              }
+            },
             icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
             label: const Text('Mark Recovered'),
             style: ElevatedButton.styleFrom(
@@ -555,55 +525,72 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       ),
       builder: (context) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
+          child: FutureBuilder<AppUser?>(
+            future: _authService.getUserData(widget.report?.userId ?? ''),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final user = snapshot.data;
+              final hasPhone = user != null && user.phoneNumber != null && user.phoneNumber!.isNotEmpty;
+              final hasEmail = user != null && user.email.isNotEmpty;
+
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.outlineVariant,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Contact Reporter',
+                      style: AppTextStyles.headlineMd.copyWith(color: AppColors.onBackground),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Choose how you would like to connect.',
+                      style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 24),
+                    _ContactOptionTile(
+                      icon: Icons.phone_outlined,
+                      title: 'Call',
+                      subtitle: hasPhone ? user.phoneNumber! : 'Phone number not available',
+                      color: hasPhone ? AppColors.primary : AppColors.outlineVariant,
+                      onTap: hasPhone ? () {
+                        Navigator.pop(context);
+                        launchUrl(Uri.parse('tel:${user.phoneNumber}'));
+                      } : null,
+                    ),
+                    const SizedBox(height: 12),
+                    _ContactOptionTile(
+                      icon: Icons.mail_outline,
+                      title: 'Email',
+                      subtitle: hasEmail ? user.email : 'Email not available',
+                      color: hasEmail ? AppColors.secondary : AppColors.outlineVariant,
+                      onTap: hasEmail ? () {
+                        Navigator.pop(context);
+                        launchUrl(Uri.parse('mailto:${user.email}'));
+                      } : null,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'Contact Reporter',
-                  style: AppTextStyles.headlineMd.copyWith(color: AppColors.onBackground),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Choose how you would like to connect.',
-                  style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurfaceVariant),
-                ),
-                const SizedBox(height: 24),
-                _ContactOptionTile(
-                  icon: Icons.phone_outlined,
-                  title: 'Call',
-                  subtitle: '+1 (555) 000-0000',
-                  color: AppColors.primary,
-                ),
-                const SizedBox(height: 12),
-                _ContactOptionTile(
-                  icon: Icons.mail_outline,
-                  title: 'Email',
-                  subtitle: 'reporter@campus.edu',
-                  color: AppColors.secondary,
-                ),
-                const SizedBox(height: 12),
-                _ContactOptionTile(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  title: 'In-App Message',
-                  subtitle: 'Instant messaging',
-                  color: AppColors.tertiary,
-                ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },
@@ -616,18 +603,20 @@ class _ContactOptionTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final Color color;
+  final VoidCallback? onTap;
 
   const _ContactOptionTile({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => Navigator.pop(context),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),

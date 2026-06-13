@@ -4,6 +4,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:campus_trace/frontend/theme/app_colors.dart';
 import 'package:campus_trace/frontend/theme/app_text_styles.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
+import 'package:campus_trace/backend/services/cloudinary_service.dart';
+import 'package:campus_trace/backend/services/report_service.dart';
+import 'package:campus_trace/backend/models/report_model.dart';
+import 'package:campus_trace/core/constants/app_constants.dart';
 
 class ReportItemScreen extends StatefulWidget {
   const ReportItemScreen({super.key});
@@ -15,7 +20,7 @@ class ReportItemScreen extends StatefulWidget {
 class _ReportItemScreenState extends State<ReportItemScreen> {
   bool _isLostItem = true;
   File? _selectedPhoto;
-  String _selectedCategory = 'Electronics';
+  String _selectedCategory = AppConstants.reportCategories.first;
   final ImagePicker _picker = ImagePicker();
 
   final TextEditingController _nameController = TextEditingController();
@@ -23,17 +28,9 @@ class _ReportItemScreenState extends State<ReportItemScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   // We use a controller for Date to show "Today" as default in UI
   final TextEditingController _dateController = TextEditingController(text: 'Today');
-
-  final List<String> _categories = [
-    'Electronics',
-    'Wallet',
-    'ID Card',
-    'Keys',
-    'Books',
-    'Bottle',
-    'Bag',
-    'Other',
-  ];
+  
+  bool _isLoading = false;
+  DateTime _actualSelectedDate = DateTime.now();
 
   @override
   void dispose() {
@@ -141,12 +138,13 @@ class _ReportItemScreenState extends State<ReportItemScreen> {
 
     if (pickedDate != null && mounted) {
       setState(() {
+        _actualSelectedDate = pickedDate;
         _dateController.text = DateFormat('dd MMM yyyy').format(pickedDate);
       });
     }
   }
 
-  void _validateAndSubmit() {
+  Future<void> _validateAndSubmit() async {
     if (_nameController.text.trim().isEmpty || 
         _locationController.text.trim().isEmpty ||
         _dateController.text.trim().isEmpty ||
@@ -160,16 +158,79 @@ class _ReportItemScreenState extends State<ReportItemScreen> {
       );
       return;
     }
+
+    if (_selectedPhoto == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please attach a photo of the item.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     
-    // Mock publish action
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Report published successfully.'),
-        backgroundColor: AppColors.secondary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      final authService = AuthService();
+      final user = authService.currentUser;
+      if (user == null) throw Exception('User not authenticated.');
+
+      final userData = await authService.getUserData(user.uid);
+      if (userData == null) throw Exception('User data not found.');
+
+      final cloudinaryService = CloudinaryService();
+      final imageUrl = await cloudinaryService.uploadImage(_selectedPhoto!);
+      
+      if (imageUrl == null) {
+        throw Exception('Image upload failed.');
+      }
+
+      final reportService = ReportService();
+      final report = ReportModel(
+        reportId: '', // Service will generate this
+        userId: user.uid,
+        userName: userData.fullName,
+        userEmail: userData.email,
+        type: _isLostItem ? 'lost' : 'found',
+        title: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        category: _selectedCategory,
+        location: _locationController.text.trim(),
+        reportDate: _actualSelectedDate,
+        imageUrl: imageUrl,
+        status: 'active',
+        isRecovered: false,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await reportService.createReport(report);
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Report published successfully.'),
+          backgroundColor: AppColors.secondary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -601,10 +662,10 @@ class _ReportItemScreenState extends State<ReportItemScreen> {
       height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _categories.length,
+        itemCount: AppConstants.reportCategories.length,
         separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final category = _categories[index];
+          final category = AppConstants.reportCategories[index];
           final isSelected = _selectedCategory == category;
           return GestureDetector(
             onTap: () => setState(() => _selectedCategory = category),
@@ -750,21 +811,27 @@ class _ReportItemScreenState extends State<ReportItemScreen> {
             width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              onPressed: _validateAndSubmit,
+              onPressed: _isLoading ? null : _validateAndSubmit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryContainer,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.upload_rounded, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Publish Report', style: AppTextStyles.labelMd.copyWith(color: Colors.white, fontSize: 16)),
-                ],
-              ),
+              child: _isLoading 
+                ? const SizedBox(
+                    width: 24, 
+                    height: 24, 
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.upload_rounded, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Publish Report', style: AppTextStyles.labelMd.copyWith(color: Colors.white, fontSize: 16)),
+                    ],
+                  ),
             ),
           ),
           const SizedBox(height: 12),

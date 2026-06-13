@@ -4,6 +4,11 @@ import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/screens/report/report_item_screen.dart';
 import 'package:campus_trace/frontend/screens/item/item_detail_screen.dart';
 import 'package:campus_trace/frontend/screens/notifications/notifications_screen.dart';
+import 'package:campus_trace/backend/services/auth_service.dart';
+import 'package:campus_trace/backend/services/report_service.dart';
+import 'package:campus_trace/backend/models/report_model.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 
 class MyReportsScreen extends StatefulWidget {
   const MyReportsScreen({super.key});
@@ -25,62 +30,12 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
     'Archived',
   ];
 
-  List<_MockReportItem> _reports = [];
+  final ReportService _reportService = ReportService();
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
     super.initState();
-    _loadMockData();
-  }
-
-  void _loadMockData() {
-    _reports = [
-      _MockReportItem(
-        id: '1',
-        title: 'Laptop Charger',
-        type: 'Lost',
-        location: 'Library, 2nd Floor',
-        date: 'Oct 24',
-        status: 'Active',
-        icon: Icons.power_rounded,
-      ),
-      _MockReportItem(
-        id: '2',
-        title: 'Student ID',
-        type: 'Lost',
-        location: 'Science Building',
-        date: 'Oct 22',
-        status: 'Recovered',
-        icon: Icons.badge_rounded,
-      ),
-      _MockReportItem(
-        id: '3',
-        title: 'Wallet',
-        type: 'Found',
-        location: 'Cafeteria',
-        date: 'Oct 21',
-        status: 'Active',
-        icon: Icons.account_balance_wallet_rounded,
-      ),
-      _MockReportItem(
-        id: '4',
-        title: 'Keys',
-        type: 'Found',
-        location: 'Campus Cafe',
-        date: 'Oct 20',
-        status: 'Archived',
-        icon: Icons.key_rounded,
-      ),
-      _MockReportItem(
-        id: '5',
-        title: 'Backpack',
-        type: 'Lost',
-        location: 'Main Entrance',
-        date: 'Oct 15',
-        status: 'Active',
-        icon: Icons.backpack_rounded,
-      ),
-    ];
   }
 
   Future<void> _handleRefresh() async {
@@ -89,72 +44,128 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  void _markRecovered(String id) {
-    setState(() {
-      final index = _reports.indexWhere((r) => r.id == id);
-      if (index != -1) {
-        _reports[index].status = 'Recovered';
+  void _markRecovered(String id) async {
+    try {
+      await _reportService.markRecovered(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Marked as Recovered!'),
+            backgroundColor: AppColors.secondary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Marked as Recovered!'),
-        backgroundColor: AppColors.secondary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
-  void _archiveReport(String id) {
-    setState(() {
-      final index = _reports.indexWhere((r) => r.id == id);
-      if (index != -1) {
-        _reports[index].status = 'Archived';
+  void _archiveReport(String id) async {
+    try {
+      await _reportService.archiveReport(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Report Archived'),
+            backgroundColor: AppColors.onSurfaceVariant,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Report Archived'),
-        backgroundColor: AppColors.onSurfaceVariant,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
-  List<_MockReportItem> get _filteredReports {
-    return _reports.where((r) {
+  List<ReportModel> _getFilteredReports(List<ReportModel> reports) {
+    return reports.where((r) {
       final matchesSearch = r.title.toLowerCase().contains(_searchQuery.toLowerCase());
       if (!matchesSearch) return false;
 
       if (_selectedFilter == 'All') return true;
       if (_selectedFilter == 'Lost' || _selectedFilter == 'Found') {
-        return r.type == _selectedFilter && r.status == 'Active';
+        return r.type == _selectedFilter.toLowerCase() && r.status == 'active';
       }
-      return r.status == _selectedFilter;
+      return r.status.toLowerCase() == _selectedFilter.toLowerCase();
     }).toList();
   }
-
-  int get _activeCount => _reports.where((r) => r.status == 'Active').length;
-  int get _recoveredCount => _reports.where((r) => r.status == 'Recovered').length;
-  int get _archivedCount => _reports.where((r) => r.status == 'Archived').length;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildTopSection(),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _handleRefresh,
-              color: AppColors.primary,
-              backgroundColor: AppColors.surfaceContainerLowest,
-              child: _isLoading ? _buildLoadingState() : _buildListContent(),
-            ),
-          ),
-        ],
+      body: StreamBuilder<List<ReportModel>>(
+        stream: _authService.currentUser != null 
+            ? _reportService.getUserReports(_authService.currentUser!.uid)
+            : const Stream.empty(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Column(
+              children: [
+                _buildTopSection(0, 0, 0),
+                Expanded(child: _buildLoadingState()),
+              ],
+            );
+          }
+
+          if (snapshot.hasError) {
+            debugPrint('MyReportsScreen Stream Error: ${snapshot.error}');
+            return Column(
+              children: [
+                _buildTopSection(0, 0, 0),
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        '${snapshot.error}',
+                        style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          final allReports = snapshot.data ?? [];
+          final activeCount = allReports.where((r) => r.status == 'active').length;
+          final recoveredCount = allReports.where((r) => r.status == 'recovered').length;
+          final archivedCount = allReports.where((r) => r.status == 'archived').length;
+
+          return Column(
+            children: [
+              _buildTopSection(activeCount, recoveredCount, archivedCount),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _handleRefresh,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.surfaceContainerLowest,
+                  child: _isLoading ? _buildLoadingState() : _buildListContent(allReports),
+                ),
+              ),
+            ],
+          );
+        }
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
@@ -217,7 +228,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
     );
   }
 
-  Widget _buildTopSection() {
+  Widget _buildTopSection(int activeCount, int recoveredCount, int archivedCount) {
     return Container(
       color: AppColors.background,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
@@ -230,7 +241,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
               Expanded(
                 child: _SummaryCard(
                   title: 'Active\nReports',
-                  value: '$_activeCount',
+                  value: '$activeCount',
                   color: AppColors.primary,
                 ),
               ),
@@ -238,7 +249,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
               Expanded(
                 child: _SummaryCard(
                   title: 'Recovered\nItems',
-                  value: '$_recoveredCount',
+                  value: '$recoveredCount',
                   color: AppColors.secondary,
                 ),
               ),
@@ -246,7 +257,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
               Expanded(
                 child: _SummaryCard(
                   title: 'Archived\nReports',
-                  value: '$_archivedCount',
+                  value: '$archivedCount',
                   color: AppColors.outline,
                 ),
               ),
@@ -322,8 +333,8 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
     );
   }
 
-  Widget _buildListContent() {
-    final items = _filteredReports;
+  Widget _buildListContent(List<ReportModel> allReports) {
+    final items = _getFilteredReports(allReports);
 
     if (items.isEmpty) {
       return _buildEmptyState();
@@ -336,15 +347,37 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
       itemBuilder: (context, index) {
         return _ReportCard(
           item: items[index],
-          onMarkRecovered: () => _markRecovered(items[index].id),
-          onArchive: () => _archiveReport(items[index].id),
+          onMarkRecovered: () {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: AppColors.surfaceContainerLowest,
+                title: Text('Mark as Recovered?', style: AppTextStyles.headlineMd),
+                content: Text('Are you sure this item has been recovered?', style: AppTextStyles.bodyMd),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text('Cancel', style: AppTextStyles.labelMd.copyWith(color: AppColors.outline)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _markRecovered(items[index].reportId);
+                    },
+                    child: Text('Confirm', style: AppTextStyles.labelMd.copyWith(color: AppColors.secondary)),
+                  ),
+                ],
+              ),
+            );
+          },
+          onArchive: () => _archiveReport(items[index].reportId),
         );
       },
     );
   }
 
   Widget _buildEmptyState() {
-    String message = 'No Reports Yet';
+    String message = 'You haven\'t submitted any reports yet.';
     if (_selectedFilter == 'Lost') message = 'No Lost Reports';
     if (_selectedFilter == 'Found') message = 'No Found Reports';
     if (_selectedFilter == 'Recovered') message = 'No Recovered Items';
@@ -469,28 +502,8 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _MockReportItem {
-  final String id;
-  final String title;
-  final String type;
-  final String location;
-  final String date;
-  String status;
-  final IconData icon;
-
-  _MockReportItem({
-    required this.id,
-    required this.title,
-    required this.type,
-    required this.location,
-    required this.date,
-    required this.status,
-    required this.icon,
-  });
-}
-
 class _ReportCard extends StatelessWidget {
-  final _MockReportItem item;
+  final ReportModel item;
   final VoidCallback onMarkRecovered;
   final VoidCallback onArchive;
 
@@ -502,12 +515,18 @@ class _ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isRecovered = item.status == 'Recovered';
-    final isArchived = item.status == 'Archived';
+    final isRecovered = item.isRecovered || item.status == 'recovered';
+    final isArchived = item.status == 'archived';
     
     // Border accent color based on status
     Color borderColor = AppColors.outlineVariant.withValues(alpha: 0.3);
     if (isRecovered) borderColor = AppColors.secondary.withValues(alpha: 0.5);
+
+    String displayStatus = 'Active';
+    if (isRecovered) displayStatus = 'Recovered';
+    if (isArchived) displayStatus = 'Archived';
+    
+    String displayType = item.type == 'lost' ? 'Lost' : 'Found';
 
     return GestureDetector(
       onTap: () {
@@ -515,10 +534,7 @@ class _ReportCard extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => ItemDetailScreen(
-              isOwner: true,
-              title: item.title,
-              type: item.type,
-              status: item.status,
+              report: item,
             ),
           ),
         );
@@ -555,14 +571,18 @@ class _ReportCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(12),
+                    image: item.imageUrl.isNotEmpty ? DecorationImage(
+                      image: CachedNetworkImageProvider(item.imageUrl),
+                      fit: BoxFit.cover,
+                    ) : null,
                   ),
-                  child: Center(
+                  child: item.imageUrl.isEmpty ? Center(
                     child: Icon(
-                      item.icon,
+                      Icons.image_not_supported_outlined,
                       size: 32,
                       color: AppColors.outlineVariant,
                     ),
-                  ),
+                  ) : null,
                 ),
                 const SizedBox(width: 16),
                 
@@ -585,7 +605,7 @@ class _ReportCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          _buildStatusBadge(item.status),
+                          _buildStatusBadge(displayStatus),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -615,7 +635,7 @@ class _ReportCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            item.date,
+                            DateFormat('MMM d').format(item.reportDate),
                             style: AppTextStyles.labelSm.copyWith(
                               color: AppColors.outline,
                               fontWeight: FontWeight.w400,
@@ -625,15 +645,15 @@ class _ReportCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: item.type == 'Lost' 
+                              color: item.type == 'lost' 
                                   ? AppColors.error.withValues(alpha: 0.1) 
                                   : AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              item.type,
+                              displayType,
                               style: AppTextStyles.labelSm.copyWith(
-                                color: item.type == 'Lost' ? AppColors.error : AppColors.primary,
+                                color: item.type == 'lost' ? AppColors.error : AppColors.primary,
                                 fontSize: 10,
                               ),
                             ),

@@ -4,6 +4,11 @@ import 'package:campus_trace/frontend/theme/app_text_styles.dart';
 import 'package:campus_trace/frontend/screens/report/report_item_screen.dart';
 import 'package:campus_trace/frontend/screens/item/item_detail_screen.dart';
 import 'package:campus_trace/frontend/screens/notifications/notifications_screen.dart';
+import 'package:campus_trace/backend/services/report_service.dart';
+import 'package:campus_trace/backend/models/report_model.dart';
+import 'package:campus_trace/core/constants/app_constants.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 
 class DiscoverScreen extends StatefulWidget {
   const DiscoverScreen({super.key});
@@ -15,18 +20,11 @@ class DiscoverScreen extends StatefulWidget {
 class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _selectedCategory = 'All';
+  String _searchQuery = '';
   bool _isLoading = false;
+  final ReportService _reportService = ReportService();
 
-  final List<String> _categories = [
-    'All',
-    'Electronics',
-    'Wallets',
-    'IDs',
-    'Bags',
-    'Keys',
-    'Books',
-    'Bottles',
-  ];
+  List<String> get _categories => ['All', ...AppConstants.reportCategories];
 
   @override
   void initState() {
@@ -44,19 +42,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
   void dispose() {
     _tabController.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleRefresh() async {
-    setState(() {
-      _isLoading = true;
-    });
-    // Mock network delay
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   @override
@@ -84,19 +69,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
           
           // List Section
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: _handleRefresh,
-              color: AppColors.primary,
-              backgroundColor: AppColors.surfaceContainerLowest,
-              child: _isLoading 
-                ? _buildLoadingState()
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildItemsList(isLost: true),
-                      _buildItemsList(isLost: false),
-                    ],
-                  ),
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildItemsList(isLost: true),
+                _buildItemsList(isLost: false),
+              ],
             ),
           ),
         ],
@@ -164,30 +142,29 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
 
   Widget _buildSearchBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.outlineVariant.withValues(alpha: 0.3)),
       ),
-      child: Row(
-        children: [
-          Icon(
+      child: TextField(
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value.toLowerCase().trim();
+          });
+        },
+        style: AppTextStyles.bodyMd.copyWith(color: AppColors.onSurface),
+        decoration: InputDecoration(
+          hintText: 'Search items, locations, or categories',
+          hintStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.outline),
+          prefixIcon: Icon(
             Icons.search_rounded,
             color: AppColors.outline,
             size: 22,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Search items, locations, or categories',
-              style: AppTextStyles.bodyMd.copyWith(
-                color: AppColors.outline,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
       ),
     );
   }
@@ -321,22 +298,59 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
   }
 
   Widget _buildItemsList({required bool isLost}) {
-    List<_DiscoverMockItem> items = isLost ? _getMockLostItems() : _getMockFoundItems();
-    
-    // Simple mock filter
-    if (_selectedCategory != 'All') {
-      items = items.where((item) => item.category == _selectedCategory).toList();
-    }
+    return StreamBuilder<List<ReportModel>>(
+      stream: _reportService.getAllReports(),
+      builder: (context, snapshot) {
+        if (_isLoading || snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingState();
+        }
 
-    if (items.isEmpty) {
-      return _buildEmptyState(isLost: isLost);
-    }
+        if (snapshot.hasError) {
+          debugPrint('DiscoverScreen Stream Error: ${snapshot.error}');
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: Text(
+                '${snapshot.error}',
+                style: AppTextStyles.bodySm.copyWith(color: AppColors.error),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        return _DiscoverItemCard(item: items[index]);
+        List<ReportModel> items = snapshot.data ?? [];
+        
+        // Filter by Lost/Found
+        items = items.where((item) => item.type == (isLost ? 'lost' : 'found')).toList();
+
+        // Filter by Category
+        if (_selectedCategory != 'All') {
+          items = items.where((item) => item.category == _selectedCategory).toList();
+        }
+
+        // Filter by Search Query
+        if (_searchQuery.isNotEmpty) {
+          items = items.where((item) {
+            final titleMatch = item.title.toLowerCase().contains(_searchQuery);
+            final descMatch = item.description.toLowerCase().contains(_searchQuery);
+            final locMatch = item.location.toLowerCase().contains(_searchQuery);
+            final catMatch = item.category.toLowerCase().contains(_searchQuery);
+            return titleMatch || descMatch || locMatch || catMatch;
+          }).toList();
+        }
+
+        if (items.isEmpty) {
+          return _buildEmptyState(isLost: isLost);
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            return _DiscoverItemCard(item: items[index]);
+          },
+        );
       },
     );
   }
@@ -357,7 +371,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
             ),
             const SizedBox(height: 16),
             Text(
-              isLost ? 'No lost items found' : 'No matching results',
+              'No reports available yet.',
               style: AppTextStyles.headlineMd.copyWith(
                 color: AppColors.onBackground,
                 fontSize: 18,
@@ -389,117 +403,26 @@ class _DiscoverScreenState extends State<DiscoverScreen> with SingleTickerProvid
       ),
     );
   }
-
-  List<_DiscoverMockItem> _getMockLostItems() {
-    return [
-      _DiscoverMockItem(
-        title: 'Laptop Charger (Type-C)',
-        location: 'Library, 2nd Floor',
-        date: '2 hours ago',
-        category: 'Electronics',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.power_rounded,
-      ),
-      _DiscoverMockItem(
-        title: 'Student ID Card',
-        location: 'Science Building',
-        date: 'Today',
-        category: 'IDs',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.badge_rounded,
-      ),
-      _DiscoverMockItem(
-        title: 'Black Leather Wallet',
-        location: 'Cafeteria',
-        date: 'Yesterday',
-        category: 'Wallets',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.account_balance_wallet_rounded,
-      ),
-      _DiscoverMockItem(
-        title: 'AirPods Pro Right Earbud',
-        location: 'Gym',
-        date: 'Jun 8',
-        category: 'Electronics',
-        status: 'Lost',
-        statusColor: AppColors.tertiary,
-        icon: Icons.headphones_rounded,
-      ),
-    ];
-  }
-
-  List<_DiscoverMockItem> _getMockFoundItems() {
-    return [
-      _DiscoverMockItem(
-        title: 'Hydro Flask (Blue)',
-        location: 'Gym Locker Room',
-        date: '1 hour ago',
-        category: 'Bottles',
-        status: 'Found',
-        statusColor: AppColors.secondary,
-        icon: Icons.water_drop_rounded,
-      ),
-      _DiscoverMockItem(
-        title: 'TI-84 Calculator',
-        location: 'Math Lab 101',
-        date: 'Today',
-        category: 'Electronics',
-        status: 'Found',
-        statusColor: AppColors.secondary,
-        icon: Icons.calculate_rounded,
-      ),
-      _DiscoverMockItem(
-        title: 'Car Keys (Toyota)',
-        location: 'Parking Lot B',
-        date: 'Yesterday',
-        category: 'Keys',
-        status: 'Claimed',
-        statusColor: AppColors.outline,
-        icon: Icons.key_rounded,
-      ),
-      _DiscoverMockItem(
-        title: 'North Face Backpack',
-        location: 'Main Entrance',
-        date: 'Jun 8',
-        category: 'Bags',
-        status: 'Found',
-        statusColor: AppColors.secondary,
-        icon: Icons.backpack_rounded,
-      ),
-    ];
-  }
-}
-
-class _DiscoverMockItem {
-  final String title;
-  final String location;
-  final String date;
-  final String category;
-  final String status;
-  final Color statusColor;
-  final IconData icon;
-
-  const _DiscoverMockItem({
-    required this.title,
-    required this.location,
-    required this.date,
-    required this.category,
-    required this.status,
-    required this.statusColor,
-    required this.icon,
-  });
 }
 
 class _DiscoverItemCard extends StatelessWidget {
-  final _DiscoverMockItem item;
+  final ReportModel item;
 
   const _DiscoverItemCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
+    Color statusColor;
+    String statusText;
+    
+    if (item.isRecovered || item.status == 'recovered') {
+      statusColor = AppColors.outline;
+      statusText = 'Recovered';
+    } else {
+      statusColor = item.type == 'lost' ? AppColors.tertiary : AppColors.secondary;
+      statusText = item.type == 'lost' ? 'Lost' : 'Found';
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -523,10 +446,7 @@ class _DiscoverItemCard extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => ItemDetailScreen(
-                  isOwner: false,
-                  title: item.title,
-                  type: item.statusColor == AppColors.error ? 'Lost' : 'Found',
-                  status: 'Active',
+                  report: item,
                 ),
               ),
             );
@@ -543,14 +463,18 @@ class _DiscoverItemCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(12),
+                    image: item.imageUrl.isNotEmpty ? DecorationImage(
+                      image: CachedNetworkImageProvider(item.imageUrl),
+                      fit: BoxFit.cover,
+                    ) : null,
                   ),
-                  child: Center(
+                  child: item.imageUrl.isEmpty ? Center(
                     child: Icon(
-                      item.icon,
+                      Icons.image_not_supported_outlined,
                       size: 40,
                       color: AppColors.outlineVariant,
                     ),
-                  ),
+                  ) : null,
                 ),
                 const SizedBox(width: 16),
                 
@@ -614,7 +538,7 @@ class _DiscoverItemCard extends StatelessWidget {
                           Row(
                             children: [
                               Text(
-                                item.date,
+                                DateFormat('MMM d').format(item.reportDate),
                                 style: AppTextStyles.labelSm.copyWith(
                                   color: AppColors.outline,
                                   fontWeight: FontWeight.w400,
@@ -625,13 +549,13 @@ class _DiscoverItemCard extends StatelessWidget {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: item.statusColor.withValues(alpha: 0.1),
+                                  color: statusColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  item.status,
+                                  statusText,
                                   style: AppTextStyles.labelSm.copyWith(
-                                    color: item.statusColor,
+                                    color: statusColor,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
                                   ),

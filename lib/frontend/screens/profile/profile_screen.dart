@@ -7,6 +7,7 @@ import 'package:campus_trace/frontend/screens/profile/notification_preferences_s
 import 'package:campus_trace/frontend/screens/profile/about_screen.dart';
 import 'package:campus_trace/frontend/screens/auth/login_screen.dart';
 import 'package:campus_trace/backend/services/auth_service.dart';
+import 'package:campus_trace/backend/services/report_service.dart';
 
 import 'package:campus_trace/backend/models/app_user.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -21,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
+  final ReportService _reportService = ReportService();
   AppUser? _user;
   bool _isLoading = true;
 
@@ -186,35 +188,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildStatsSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          Expanded(
-            child: _StatCard(
-              title: 'Reports\nSubmitted',
-              value: '0',
-              color: AppColors.primary,
-            ),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _user != null ? _reportService.getUserReportStats(_user!.uid) : Future.value({'reportsSubmitted': 0, 'itemsRecovered': 0, 'recoveryRate': 0}),
+      builder: (context, snapshot) {
+        int reportsSubmitted = 0;
+        int itemsRecovered = 0;
+        int recoveryRate = 0;
+
+        if (snapshot.hasData) {
+          reportsSubmitted = snapshot.data!['reportsSubmitted'] ?? 0;
+          itemsRecovered = snapshot.data!['itemsRecovered'] ?? 0;
+          recoveryRate = snapshot.data!['recoveryRate'] ?? 0;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'Reports\nSubmitted',
+                  value: '$reportsSubmitted',
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Items\nRecovered',
+                  value: '$itemsRecovered',
+                  color: AppColors.secondary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  title: 'Recovery\nRate',
+                  value: '$recoveryRate%',
+                  color: AppColors.tertiary,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatCard(
-              title: 'Items\nRecovered',
-              value: '0',
-              color: AppColors.secondary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatCard(
-              title: 'Recovery\nRate',
-              value: '0%',
-              color: AppColors.tertiary,
-            ),
-          ),
-        ],
-      ),
+        );
+      }
     );
   }
 
